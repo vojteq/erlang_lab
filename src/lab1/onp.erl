@@ -16,48 +16,32 @@ start() ->
   % "2 + 3 * 5"
   io:fwrite(onp("2 3 5 * +")).
 
-
 onp(Input) ->
-  io:fwrite("ONP/1~n"),
+  io:fwrite("ONP/1~n~s~n", [string:tokens(Input, " ")]),
   onp(string:tokens(Input, " "), []).
 
 onp([], Result) ->
-  io:fwrite("RESULT~n"),
-  Result;
+  io:fwrite("RESULT: ~s~n", [Result]);
 
 onp(["+" | Tail], [First, Second | Stack]) ->
-  io:fwrite("PLUS~n"),
-  onp(Tail, [string:to_integer(First) + string:to_integer(Second)] ++ Stack);
+  {FirstNumber, _} = string:to_integer(First),
+  {SecondNumber, _} = string:to_integer(Second),
+  onp(Tail, [integer_to_list(SecondNumber + FirstNumber)] ++ Stack);
+
 onp(["-" | Tail], [First, Second | Stack]) ->
-  io:fwrite("MINUS~n"),
-  onp(Tail, [string:to_integer(First) - string:to_integer(Second)] ++ Stack);
+  {FirstNumber, _} = string:to_integer(First),
+  {SecondNumber, _} = string:to_integer(Second),
+  onp(Tail, [integer_to_list(SecondNumber - FirstNumber)] ++ Stack);
+
 onp(["*" | Tail], [First, Second | Stack]) ->
-  io:fwrite("RAZY~n"),
-  onp(Tail, [string:to_integer(First) * string:to_integer(Second)] ++ Stack);
+  {FirstNumber, _} = string:to_integer(First),
+  {SecondNumber, _} = string:to_integer(Second),
+  onp(Tail, [integer_to_list(SecondNumber * FirstNumber)] ++ Stack);
+
 onp(["/" | Tail], [First, Second | Stack]) ->
-  io:fwrite("DZIELONE~n"),
-  onp(Tail, [string:to_integer(First) / string:to_integer(Second)] ++ Stack);
+  {FirstNumber, _} = string:to_integer(First),
+  {SecondNumber, _} = string:to_integer(Second),
+  onp(Tail, [integer_to_list(SecondNumber / FirstNumber)] ++ Stack);
+
 onp([Head | Tail], Stack) ->
-  io:fwrite("LICZBA~n"),
   onp(Tail, [Head] ++ Stack).
-
-%%onp([Head | Rest], Stack) when is_number(Head)->
-%%  onp(Rest, [Head] ++ Stack);
-%%
-%%onp([Head | Rest], [First, Second | Stack]) ->
-%%  onp(Rest, [simpleOperation(Head, First, Second)] ++ Stack).
-%%
-%%
-%%simpleOperation("+", First, Second) ->
-%%  string:to_integer(First) + string:to_integer(Second);
-%%
-%%simpleOperation("-", First, Second) ->
-%%  string:to_integer(First) - string:to_integer(Second);
-%%
-%%simpleOperation("*", First, Second) ->
-%%  string:to_integer(First) * string:to_integer(Second);
-%%
-%%simpleOperation("/", First, Second) ->
-%%  string:to_integer(First) / string:to_integer(Second).
-
-
