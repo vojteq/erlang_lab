@@ -15,77 +15,48 @@
 start() ->
   % "2 + 3 * 5" = "2 3 5 * +" = 17
   % "1 + 2 + 3 + 4 + 5 + 6 * 7" = "1 2 + 3 + 4 + 5 + 6 7 * +" = 57
-%%  io:fwrite(onp("2 3 5 * +")).
-  io:fwrite(onp("1.5 sin")).
+  io:fwrite("RESULT: ~w~n", [onp("1 2 + 3 + 4 + 5 + 6 7 * +")]).
 
 
 onp(Input) ->
   onp(string:tokens(Input, " "), []).
 
 onp([], Result) ->
-  io:fwrite("RESULT: ~s~n", [Result]);
+  Result;
 
 onp(["+" | Tail], [First, Second | Stack]) ->
-  FirstNumber = get_value(First),
-  SecondNumber = get_value(Second),
-  onp(Tail, [number_to_list(SecondNumber + FirstNumber)] ++ Stack);
+  onp(Tail, [First + Second] ++ Stack);
 
 onp(["-" | Tail], [First, Second | Stack]) ->
-  FirstNumber = get_value(First),
-  SecondNumber = get_value(Second),
-  onp(Tail, [number_to_list(SecondNumber - FirstNumber)] ++ Stack);
+  onp(Tail, [First - Second] ++ Stack);
 
 onp(["*" | Tail], [First, Second | Stack]) ->
-  FirstNumber = get_value(First),
-  SecondNumber = get_value(Second),
-  onp(Tail, [number_to_list(SecondNumber * FirstNumber)] ++ Stack);
+  onp(Tail, [First * Second] ++ Stack);
 
 onp(["/" | Tail], [First, Second | Stack]) ->
-  FirstNumber = get_value(First),
-  SecondNumber = get_value(Second),
-  onp(Tail, [number_to_list(SecondNumber / FirstNumber)] ++ Stack);
+  onp(Tail, [Second / First] ++ Stack);
 
 onp(["^" | Tail], [First, Second | Stack]) ->
-  FirstNumber = get_value(First),
-  SecondNumber = get_value(Second),
-  onp(Tail, [number_to_list(math:pow(SecondNumber, FirstNumber))] ++ Stack);
+  onp(Tail, [math:pow(Second, First)] ++ Stack);
 
 onp(["sqrt" | Tail], [First | Stack]) ->
-  Number = get_value(First),
-  onp(Tail, [number_to_list(math:sqrt(Number))] ++ Stack);
+  onp(Tail, [math:sqrt(First)] ++ Stack);
 
 onp(["sin" | Tail], [First | Stack]) ->
-  Number = get_value(First),
-  onp(Tail, [number_to_list(math:sin(Number))] ++ Stack);
+  onp(Tail, [math:sin(First)] ++ Stack);
 
 onp(["cos" | Tail], [First | Stack]) ->
-  Number = get_value(First),
-  onp(Tail, [number_to_list(math:cos(Number))] ++ Stack);
+  onp(Tail, [math:cos(First)] ++ Stack);
 
 onp(["tan" | Tail], [First | Stack]) ->
-  Number = get_value(First),
-  onp(Tail, [number_to_list(math:tan(Number))] ++ Stack);
+  onp(Tail, [math:tan(First)] ++ Stack);
 
 onp([Head | Tail], Stack) ->
-  onp(Tail, [Head] ++ Stack).
+  onp(Tail, [getValue(Head)] ++ Stack).
 
 
-get_value(String) ->
-  Float = (catch list_to_float(String)),
-  Integer = (catch list_to_integer(String)),
-  return_value(Integer, erlang:is_integer(Integer), Float, erlang:is_float(Float)).
-
-return_value(Integer, true, _, false) ->
-  Integer;
-return_value(_, false, Float, true) ->
-  Float.
-
-number_to_list(Number) ->
-  FloatList = (catch float_to_list(Number)),
-  IntegerList = (catch integer_to_list(Number)),
-  return_list(IntegerList, is_list(IntegerList), FloatList, is_list(FloatList)).
-
-return_list(IntegerList, true, _, false) ->
-  IntegerList;
-return_list(_, false, FloatList, true) ->
-  FloatList.
+getValue(StringValue) ->
+  case string:to_float(StringValue) of
+    {error, no_float} -> element(1, string:to_integer(StringValue));
+    {_, _} -> element(1, string:to_float(StringValue))
+  end.
