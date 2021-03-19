@@ -21,7 +21,7 @@ start() ->
 onp(Input) ->
   onp(string:tokens(Input, " "), []).
 
-onp([], Result) ->
+onp([], [Result]) ->
   Result;
 
 onp(["+" | Tail], [First, Second | Stack]) ->
