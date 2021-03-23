@@ -10,15 +10,16 @@
 -author("vojteq").
 
 %% API
--export([qs/1, start/0, myMap/2, myFilter/2]).
+-export([qs/1, start/0, myMap/2, myFilter/2, fun3/0]).
 
 start() ->
 %%  io:fwrite("~w", [qs([1,6,3,5,87,12,2])]).
 %%  io:fwrite("~w", [randomElems(20, 1, 5)]).
 %%  List = randomElems(10000, 1, 10),
 %%  compareSpeeds(List, fun qs/1, fun lists:sort/1),
-  io:fwrite("~w", [sumDigits(1234)]).
 %%  io:fwrite("~w", [sumDigits(1234)]).
+%%  io:fwrite("~w", [sumDigits(1234)]).
+  fun3().
 
 qs([]) ->
   [];
@@ -50,3 +51,8 @@ myFilter(F, List) ->
 
 sumDigits(N) ->
   lists:foldl(fun (X, Y) -> X + Y - $0 end, 0, integer_to_list(N)).
+
+fun3() ->
+  List = lists:filter(fun (X) -> sumDigits(X) rem 3 == 0 end, randomElems(1000000, 1, 1000000)),
+  %io:format("size: ~w~n ~w~n", [length(List), List]).
+  io:format("size: ~w~n", [length(List)]).
