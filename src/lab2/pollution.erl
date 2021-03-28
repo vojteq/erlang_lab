@@ -14,7 +14,7 @@
 
 -record(station, {name, coords, measurements = #{}}).
 -record(coords, {lat, lon}).
--record(measurement, {type, date}).
+-record(measurement, {type, dateTime}).
 -record(dateTime, {date, time}). % TODO przerobic date na rekord
 
 -define(isStationName(Name), is_list(Name)).
@@ -22,6 +22,7 @@
 %%-define(isType(Type), is_list(Type) andalso (string:equal(Type, "PM10") orelse string:equal(Type, "PM5") orelse string:equal(Type, "PM2.5"))).   //TODO czy da sie to zrobic?
 %%-define(isType(Type), is_list(Type) andalso (Type == "PM10") orelse (Type == "PM5") orelse (Type == "PM2.5"))).
 -define(isType(Type), is_list(Type)).
+-define(isDateOrTime(Input), is_tuple(Input) andalso tuple_size(Input) == 3 andalso is_integer(element(1, Input)) andalso is_integer(element(2, Input)) andalso is_integer(element(3, Input))).
 
 %% 16. Dodaj do modułu pollution funkcję getDailyOverLimit, która zwraca liczbę stacji, na których danego dnia co najmniej raz przekroczona jest norma wartości danego parametru;
 %% LICZBA POMIARÓW WYKONANYCH NA DANEJ STACJI W CIAGU ROKU
@@ -44,21 +45,22 @@ start() ->
   Time = calendar:local_time(),
   Type = "PM10",
   M6 = addValue(M5, #coords{lat = 30, lon = 40}, Time, Type, 200),
-  M7 = addValue(M6, #coords{lat = 12, lon = 53}, Time, Type, 40),
-  printMonitor(M6),
+%%  M7 = addValue(M6, #coords{lat = 12, lon = 53}, Time, Type, 40),
+  M7 = addValue(M6, "warszawa", Time, Type, 40),
+  printMonitor(M7),
 %%  printMeas(getAllOfType(M6, "krakow", "PM10")),
-  printMeas(getOneValue(M6, "krakow", Time, Type)),
-  io:format("MEAN: ~w~n", [getStationMean(M6, "krakow", "PM10")]),
+  printMeas(getOneValue(M7, "krakow", Time, Type)),
+  io:format("MEAN: ~w~n", [getStationMean(M7, "krakow", "PM10")]),
   io:format("DAILY MEAN: ~w~n", [getDailyMean(M7, Time, Type)]),
-%%  io:format("DAY OVER LIMIT: ~w~n", [getDailyOverLimit(M7, element(1, Time))]).
-  io:format("DAY OVER LIMIT: ~w~n", [getDailyOverLimit(M7, {2021,3,25})]),
-  io:format("MEASUREMENTS IN 2021: ~w~n", [getMeasurementsOnStationInYear(M7, "krakow", 2021)]).
+  io:format("DAY OVER LIMIT (25.03): ~w~n", [getDailyOverLimit(M7, {2021, 3, 25})]),
+  io:format("DAY OVER LIMIT (TODAY): ~w~n", [getDailyOverLimit(M7, element(1, Time))]),
+  io:format("MEASUREMENTS IN 2021 on 'krakow' station: ~w~n", [getMeasurementsOnStationInYear(M7, "krakow", 2021)]).
 
 
 createMonitor() ->
   [].
 
-addStation(Monitor, StationName, Latitude, Longitude) when ?isStationName(StationName) andalso ?areCoords(Latitude, Longitude) ->
+addStation(Monitor, StationName, Latitude, Longitude) when is_list(Monitor) andalso ?isStationName(StationName) andalso ?areCoords(Latitude, Longitude) ->
   NameTaken = fun(#station{name = Name, coords = _, measurements = _}, Boolean)
     -> (string:equal(StationName, Name) orelse Boolean) end,
   IsNameTaken = lists:foldl(NameTaken, false, Monitor),
@@ -81,59 +83,70 @@ addStation(Monitor, StationName, Latitude, Longitude) when ?isStationName(Statio
       [#station{name = StationName, coords = #coords{lat = Latitude, lon = Longitude}, measurements = #{}} | Monitor]
   end.
 
-addValue(Monitor, StationName, Date, Type, Value) when is_list(StationName) ->
+addValue(Monitor, StationName, {Date, Time}, Type, Value) when is_list(Monitor) andalso ?isStationName(StationName)
+  andalso ?isDateOrTime(Date) andalso ?isDateOrTime(Time) andalso ?isType(Type) ->
+
   [case S#station.name of
      StationName ->
-       M = #measurement{date = Date, type = Type},
+       M = #measurement{dateTime = #dateTime{date = Date, time = Time}, type = Type},
        Ms = S#station.measurements,
        S#station{measurements = Ms#{M => Value}};
      _ -> S
    end || S <- Monitor];
-addValue(Monitor, Coords, Date, Type, Value) when ?areCoords(Coords#coords.lat, Coords#coords.lon) ->
+addValue(Monitor, Coords, {Date, Time}, Type, Value) when is_list(Monitor) andalso ?areCoords(Coords#coords.lat, Coords#coords.lon)
+  andalso ?isDateOrTime(Date) andalso ?isDateOrTime(Time) andalso ?isType(Type) ->
+
   [case S#station.coords of
      Coords ->
-       M = #measurement{date = Date, type = Type},
+       M = #measurement{dateTime = #dateTime{date = Date, time = Time}, type = Type},
        Ms = S#station.measurements,
        S#station{measurements = Ms#{M => Value}};
      _ -> S
    end || S <- Monitor].
 
-removeValue(Monitor, StationName, Date, Type) ->
+removeValue(Monitor, StationName, {Date, Time}, Type) when is_list(Monitor) andalso ?isStationName(StationName)
+  andalso ?isDateOrTime(Date) andalso ?isDateOrTime(Time) andalso ?isType(Type) ->
+
   [case S#station.name of
      StationName ->
-       Ms = maps:remove(#measurement{date = Date, type = Type}, S#station.measurements),
+       Ms = maps:remove(#measurement{dateTime = #dateTime{date = Date, time = Time}, type = Type}, S#station.measurements),
        S#station{measurements = Ms};
      _ -> S
    end || S <- Monitor];
-removeValue(Monitor, Coords, Date, Type) ->
+removeValue(Monitor, Coords, {Date, Time}, Type) when is_list(Monitor) andalso ?areCoords(Coords#coords.lat, Coords#coords.lon)
+  andalso ?isDateOrTime(Date) andalso ?isDateOrTime(Time) andalso ?isType(Type) ->
+
   [case S#station.coords of
      Coords ->
-       Ms = maps:remove(#measurement{date = Date, type = Type}, S#station.measurements),
+       Ms = maps:remove(#measurement{dateTime = #dateTime{date = Date, time = Time}, type = Type}, S#station.measurements),
        S#station{measurements = Ms};
      _ -> S
    end || S <- Monitor].
 
 %% returns measurement from station with name==StationName, #measurement.date==Date and #measurement.type==Type
-getOneValue(Monitor, StationName, Date, Type) ->
+getOneValue(Monitor, StationName, {Date, Time}, Type) when is_list(Monitor) andalso ?isStationName(StationName)
+  andalso ?isDateOrTime(Date) andalso ?isDateOrTime(Time) andalso ?isType(Type) ->
+
   FilterStations = fun(S) -> string:equal(S#station.name, StationName) end,
-  FilterTypeAndDate = fun(#measurement{type = T, date = D}, _) -> string:equal(T, Type) andalso D == Date end,
+  FilterTypeAndDate = fun(#measurement{dateTime = #dateTime{date = D, time = T}, type = Ty}, _) ->
+    string:equal(Ty, Type) andalso D == Date andalso Time == T end,
   Station = lists:nth(1, lists:filter(FilterStations, Monitor)),
   io:format("~w~n", [maps:to_list(maps:filter(FilterTypeAndDate, Station#station.measurements))]),
   maps:to_list(maps:filter(FilterTypeAndDate, Station#station.measurements)).
 
-getStationMean(Monitor, StationName, Type) ->
+getStationMean(Monitor, StationName, Type) when is_list(Monitor) andalso ?isStationName(StationName) andalso ?isType(Type) ->
   FilterStations = fun(S) -> string:equal(S#station.name, StationName) end,
-  FilterTypes = fun(#measurement{type = T, date = _}, _) -> string:equal(T, Type) end,
+  FilterTypes = fun(#measurement{type = T, dateTime = _}, _) -> string:equal(T, Type) end,
   Station = lists:nth(1, lists:filter(FilterStations, Monitor)),
   Measurements = maps:to_list(maps:filter(FilterTypes, Station#station.measurements)),
   SumFun = fun({_, Val}, {Sum, Count}) -> {Sum + Val, Count + 1} end,
   {Sum, Count} = lists:foldl(SumFun, {0, 0}, Measurements),
   Sum / Count.
 
-getDailyMean(Monitor, Date, Type) ->
+getDailyMean(Monitor, {Date, _}, Type) when is_list(Monitor) andalso ?isDateOrTime(Date) andalso ?isType(Type) ->
   SumFun = fun({Meas, Val}, {Sum, Count}) ->
     case Meas of
-      #measurement{type = Type, date = Date} -> {Sum + Val, Count + 1};
+      #measurement{type = Type, dateTime = #dateTime{date = Date, time = _}} -> {Sum + Val, Count + 1};
       _ -> {Sum, Count}
     end end,
   ResultsFromStations = [lists:foldl(SumFun, {0, 0}, maps:to_list(S#station.measurements)) || S <- Monitor],
@@ -142,22 +155,32 @@ getDailyMean(Monitor, Date, Type) ->
   Summed / Counted.
 
 %% Date = {Year,Month,Day}
-getDailyOverLimit(Monitor, Date) ->
-  CheckStation = fun(Station) ->
-    Filter = fun(#measurement{date = {D, _}, type = _}, V) -> D == Date andalso V > 100 end,
-    case maps:size(maps:filter(Filter, Station#station.measurements)) of
+getDailyOverLimit(Monitor, {Date, _}) when is_list(Monitor) andalso ?isDateOrTime(Date) andalso is_list(Monitor) ->
+  CheckStation = fun(Measurements) ->
+    Filter = fun(Measurement, V) -> Measurement#measurement.dateTime#dateTime.date == Date andalso V > 100 end,
+    case maps:size(maps:filter(Filter, Measurements)) of
       0 -> 0;
       _ -> 1
     end
   end,
-  Fun = fun(Station, Counter) -> Counter + CheckStation(Station) end,
+  Fun = fun(Station, Counter) -> Counter + CheckStation(Station#station.measurements) end,
   lists:foldl(Fun, 0, Monitor).
+%%getDailyOverLimit(Monitor, Date) when is_list(Monitor) andalso ?isDateOrTime(Date) andalso is_list(Monitor)->
+%%  CheckStation = fun(Measurements) ->
+%%    Filter = fun(Measurement, V) -> Measurement#measurement.dateTime#dateTime.date == Date andalso V > 100 end,
+%%    case maps:size(maps:filter(Filter, Measurements)) of
+%%      0 -> 0;
+%%      _ -> 1
+%%    end
+%%  end,
+%%  Fun = fun(Station, Counter) -> Counter + CheckStation(Station#station.measurements) end,
+%%  lists:foldl(Fun, 0, Monitor).
 
-getMeasurementsOnStationInYear(Monitor, StationName, Year) ->
+
+getMeasurementsOnStationInYear(Monitor, StationName, Year) when is_list(Monitor) andalso ?isStationName(StationName) andalso is_integer(Year)->
   [Station] = [S || S <- Monitor, string:equal(S#station.name, StationName)],
-  Filter = fun(#measurement{date = {{Y,_,_}, _}, type = _}, _) -> Y == Year end,
+  Filter = fun(#measurement{dateTime = #dateTime{date = {Y, _, _}, time = _}, type = _}, _) -> Y == Year end,
   maps:size(maps:filter(Filter, Station#station.measurements)).
-
 
 printMonitor(Monitor) when is_list(Monitor) ->
   io:format("~n*PRINTING MONITOR*"),
@@ -175,6 +198,6 @@ printMeas(List) when is_list(List) ->
 
 printMeas([], _) ->
   ok;
-printMeas([{#measurement{date = Date, type = Type}, Value} | Tail], Counter) ->
-  io:format("[~w]{date: ~w, type: ~s, value: ~w}, ", [Counter, Date, Type, Value]),
+printMeas([{#measurement{dateTime = #dateTime{date = Date, time = Time}, type = Type}, Value} | Tail], Counter) ->
+  io:format("[~w]{date: ~w, time: ~w, type: ~s, value: ~w}, ", [Counter, Date, Time, Type, Value]),
   printMeas(Tail, Counter + 1).
