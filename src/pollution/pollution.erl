@@ -15,7 +15,7 @@
 -record(station, {name, coords, measurements = #{}}).
 -record(coords, {lat, lon}).
 -record(measurement, {type, dateTime}).
--record(dateTime, {date, time}). % TODO przerobic date na rekord
+-record(dateTime, {date, time}).
 
 -define(isStationName(Name), is_list(Name)).
 -define(areCoords(Lat, Lon), (is_float(Lat) orelse is_integer(Lat)) andalso (is_float(Lon) orelse is_integer(Lon))).
@@ -23,10 +23,7 @@
 %%-define(isType(Type), is_list(Type) andalso (Type == "PM10") orelse (Type == "PM5") orelse (Type == "PM2.5"))).
 -define(isType(Type), is_list(Type)).
 -define(isDateOrTime(Input), is_tuple(Input) andalso tuple_size(Input) == 3 andalso is_integer(element(1, Input)) andalso is_integer(element(2, Input)) andalso is_integer(element(3, Input))).
-
-%% 16. Dodaj do modułu pollution funkcję getDailyOverLimit, która zwraca liczbę stacji, na których danego dnia co najmniej raz przekroczona jest norma wartości danego parametru;
-%% LICZBA POMIARÓW WYKONANYCH NA DANEJ STACJI W CIAGU ROKU
-%% NAJWIEKSZA MIESIECZNA LICZBA POMIAROW // chyba lepiej cos innego
+-define(isHour(Hour), is_integer(Hour) andalso 0 =< Hour andalso Hour =< 23).
 
 start() ->
   M = createMonitor(),
@@ -52,9 +49,11 @@ start() ->
   printMeas(getOneValue(M7, "krakow", Time, Type)),
   io:format("MEAN: ~w~n", [getStationMean(M7, "krakow", "PM10")]),
   io:format("DAILY MEAN: ~w~n", [getDailyMean(M7, Time, Type)]),
-  io:format("DAY OVER LIMIT (25.03): ~w~n", [getDailyOverLimit(M7, {2021, 3, 25})]),
+%%  io:format("DAY OVER LIMIT (25.03): ~w~n", [getDailyOverLimit(M7, {2021, 3, 25})]),
   io:format("DAY OVER LIMIT (TODAY): ~w~n", [getDailyOverLimit(M7, element(1, Time))]),
-  io:format("MEASUREMENTS IN 2021 on 'krakow' station: ~w~n", [getMeasurementsOnStationInYear(M7, "krakow", 2021)]).
+  io:format("MEASUREMENTS IN 2021 at 'krakow' station: ~w~n", [getMeasurementsOnStationInYear(M7, "krakow", 2021)]),
+  {StationName, Mean} = getTheMostContaminatedStation(M7, 17),
+  io:format("MOST CONTAMINATED: ~s ~w~n", [StationName, Mean]).
 
 
 createMonitor() ->
@@ -154,8 +153,9 @@ getDailyMean(Monitor, {Date, _}, Type) when is_list(Monitor) andalso ?isDateOrTi
   {Summed, Counted} = lists:foldl(SumAll, {0, 0}, ResultsFromStations),
   Summed / Counted.
 
+%% zwraca liczbę stacji, na których danego dnia co najmniej raz przekroczona jest norma wartości danego parametru;
 %% Date = {Year,Month,Day}
-getDailyOverLimit(Monitor, {Date, _}) when is_list(Monitor) andalso ?isDateOrTime(Date) andalso is_list(Monitor) ->
+getDailyOverLimit(Monitor, Date) when is_list(Monitor) andalso ?isDateOrTime(Date) andalso is_list(Monitor) ->
   CheckStation = fun(Measurements) ->
     Filter = fun(Measurement, V) -> Measurement#measurement.dateTime#dateTime.date == Date andalso V > 100 end,
     case maps:size(maps:filter(Filter, Measurements)) of
@@ -176,11 +176,48 @@ getDailyOverLimit(Monitor, {Date, _}) when is_list(Monitor) andalso ?isDateOrTim
 %%  Fun = fun(Station, Counter) -> Counter + CheckStation(Station#station.measurements) end,
 %%  lists:foldl(Fun, 0, Monitor).
 
-
+%% liczba pomiarow wykonanych na danej stacji w danym roku
 getMeasurementsOnStationInYear(Monitor, StationName, Year) when is_list(Monitor) andalso ?isStationName(StationName) andalso is_integer(Year)->
   [Station] = [S || S <- Monitor, string:equal(S#station.name, StationName)],
   Filter = fun(#measurement{dateTime = #dateTime{date = {Y, _, _}, time = _}, type = _}, _) -> Y == Year end,
   maps:size(maps:filter(Filter, Station#station.measurements)).
+
+%%%% stacja na ktorej zanieczyszczenie o danej godzinie jest najwieksze
+getTheMostContaminatedStation(Monitor, Hour) when is_list(Monitor) andalso is_integer(Hour) andalso ?isHour(Hour) ->
+  SumMeasurements = fun({Measurement, Value}, {Sum, Count}) ->
+    case Measurement#measurement.dateTime#dateTime.time of
+      {Hour, _, _} -> {Sum + Value, Count + 1};
+      _ -> {Sum, Count}
+    end
+  end,
+  GetMeanFromStation = fun(Station) ->
+    List = maps:to_list(Station#station.measurements),
+    {Sum, Count} = lists:foldl(SumMeasurements, {0, 0}, List),
+    case {Sum, Count} of
+      {_, 0} -> {Station#station.name, 0};
+      _ -> {Station#station.name, Sum / Count}
+    end
+  end,
+  GetMostContaminated = fun({StationName, Mean}, {MostContStation, Highest}) ->
+    case {Mean > Highest, Mean > 0} of
+      {true, true} -> {StationName, Mean};
+      _ -> {MostContStation, Highest}
+    end
+  end,
+  List = [GetMeanFromStation(S) || S <- Monitor],
+  lists:foldl(GetMostContaminated, {"no measurements", -1}, List).
+
+%%getHourWithHighestContamination(Monitor, StationName, Hour, Type) when is_list(Monitor) andalso ?isStationName(StationName) andalso is_integer(Hour) andalso 0 =< Hour =< 23 andalso ?isType(Type) ->
+%%  SumMeasurements = fun({Measurement, Value}, {Sum, Count}) ->
+%%    case {Measurement#measurement.type, Measurement#measurement.dateTime#dateTime.time} of
+%%      {Type, {Hour, _, _}} -> {Sum + Value, Count + 1};
+%%      _ -> {Sum, Count}
+%%    end
+%%  end,
+%%  FilterStations = fun(Station) -> string:equal(Station#station.name, StationName) end,
+%%  [Station] = lists:filter(FilterStations, Monitor),
+%%  Result = [{Counterlists:foldl(SumMeasurements)]
+%%  ok.
 
 printMonitor(Monitor) when is_list(Monitor) ->
   io:format("~n*PRINTING MONITOR*"),
