@@ -11,7 +11,7 @@
 
 %% API
 -export([createMonitor/0, addStation/4, addValue/5, removeValue/4, getOneValue/4, getStationMean/3, getDailyMean/3,
-  getDailyOverLimit/2, getMeasurementsOnStationInYear/3, getTheMostContaminatedStation/2]).
+  getDailyOverLimit/2, getMeasurementsOnStationInYear/3, getTheMostContaminatedStation/2, start/0]).
 
 %% strukturą danych jest lista zawierająca stacje pomiarowe, każda stacja przechowuje pomiary w postaci mapy,
 %% w której kluczem jest {typ, {data, czas}} a wartpścią jest wartość pomiaru w procentach
@@ -69,14 +69,11 @@ addStation(Monitor, StationName, Latitude, Longitude) when is_list(Monitor) anda
   AreCoordsTaken = lists:foldl(CoordsTaken, false, Monitor),
   case {IsNameTaken, AreCoordsTaken} of
     {true, true} ->
-      io:format("ERROR: Name: '~s' and coords: (~w, ~w) are taken~n~n", [StationName, Latitude, Longitude]),
-      Monitor;
+      {error, "name and coords taken"};
     {true, false} ->
-      io:format("ERROR: Name: '~s' is taken~n~n", [StationName]),
-      Monitor;
+      {error, "name taken"};
     {false, true} ->
-      io:format("ERROR: Coords: (~w, ~w) are taken~n~n", [Latitude, Longitude]),
-      Monitor;
+      {error, "coords taken"};
     {false, false} ->
       [#station{name = StationName, coords = #coords{lat = Latitude, lon = Longitude}, measurements = #{}} | Monitor]
   end.
@@ -90,7 +87,6 @@ addValue(Monitor, StationName, {Date, Time}, Type, Value) when is_list(Monitor) 
        S#station{measurements = Ms#{M => Value}};
      _ -> S
    end || S <- Monitor];
-
 addValue(Monitor, Coords, {Date, Time}, Type, Value) when is_list(Monitor) andalso ?areCoords(Coords#coords.lat, Coords#coords.lon)
   andalso ?isDateOrTime(Date) andalso ?isDateOrTime(Time) andalso ?isType(Type) ->
   [case S#station.coords of
@@ -123,18 +119,44 @@ getOneValue(Monitor, StationName, {Date, Time}, Type) when is_list(Monitor) anda
   FilterStations = fun(S) -> string:equal(S#station.name, StationName) end,
   FilterTypeAndDate = fun(#measurement{dateTime = #dateTime{date = D, time = T}, type = Ty}, _) ->
     string:equal(Ty, Type) andalso D == Date andalso Time == T end,
-  Station = lists:nth(1, lists:filter(FilterStations, Monitor)),
-  io:format("~w~n", [maps:to_list(maps:filter(FilterTypeAndDate, Station#station.measurements))]),
-  maps:to_list(maps:filter(FilterTypeAndDate, Station#station.measurements)).
+  StationInList = lists:filter(FilterStations, Monitor),
+  case StationInList of
+    [] ->
+      {error, "station doesnt exist"};
+    _ ->
+      Station = lists:nth(1, StationInList),
+      Result = maps:to_list(maps:filter(FilterTypeAndDate, Station#station.measurements)),
+      case Result of
+        [] ->
+          {error, "no such measurement"};
+        R ->
+          R
+      end
+  end.
+
 
 getStationMean(Monitor, StationName, Type) when is_list(Monitor) andalso ?isStationName(StationName) andalso ?isType(Type) ->
   FilterStations = fun(S) -> string:equal(S#station.name, StationName) end,
   FilterTypes = fun(#measurement{type = T, dateTime = _}, _) -> string:equal(T, Type) end,
-  Station = lists:nth(1, lists:filter(FilterStations, Monitor)),
-  Measurements = maps:to_list(maps:filter(FilterTypes, Station#station.measurements)),
-  SumFun = fun({_, Val}, {Sum, Count}) -> {Sum + Val, Count + 1} end,
-  {Sum, Count} = lists:foldl(SumFun, {0, 0}, Measurements),
-  Sum / Count.
+  StationList = lists:filter(FilterStations, Monitor),
+  case StationList of
+    [] ->
+      {error, "station doesnt exist"};
+    _ ->
+      Station = lists:nth(1, StationList),
+      Measurements = maps:to_list(maps:filter(FilterTypes, Station#station.measurements)),
+      SumFun = fun({_, Val}, {Sum, Count}) -> {Sum + Val, Count + 1} end,
+      {Sum, Count} = lists:foldl(SumFun, {0, 0}, Measurements),
+      case {Sum, Count} of
+        {0, 0} ->
+          {error, "no measurements of this type"};
+        {0, _} ->
+          0.0;
+        {_, _} ->
+          Sum / Count
+      end
+  end.
+
 
 getDailyMean(Monitor, {Date, _}, Type) when is_list(Monitor) andalso ?isDateOrTime(Date) andalso ?isType(Type) ->
   SumFun = fun({Meas, Val}, {Sum, Count}) ->

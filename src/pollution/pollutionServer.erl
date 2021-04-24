@@ -29,19 +29,45 @@ loop(Monitor) ->
   receive
     {Pid, addStation, Name, Lat, Lon}  ->
       M = pollution:addStation(Monitor, Name, Lat, Lon),
-      Pid ! "Station added",
-      loop(M);
+      case is_list(M) of
+        true ->
+          Pid ! "Station added",
+          loop(M);
+        false ->
+          {_, Message} = M,
+          Pid ! Message,
+          loop(Monitor)
+        end;
     {Pid, addValue, NameOrCoords, DateAndTime, Type, Value} ->
       M = pollution:addValue(Monitor, NameOrCoords, DateAndTime, Type, Value),
-      Pid ! "Value added",
-      loop(M);
+      case is_list(M) of
+        true ->
+          Pid ! "Value added",
+          loop(M);
+        false ->
+          {_, Message} = M,
+          Pid ! Message,
+          loop(Monitor)
+      end;
     {Pid, removeValue, NameOrCoords, DateAndTime, Type} ->
       M = pollution:removeValue(Monitor, NameOrCoords, DateAndTime, Type),
-      Pid ! "Value removed",
-      loop(M);
+      case is_list(M) of
+        true ->
+          Pid ! "Value removed",
+          loop(M);
+        false ->
+          {_, Message} = M,
+          Pid ! Message,
+          loop(Monitor)
+      end;
     {Pid, getOneValue, Name, DateAndTime, Type} ->
-      [Result] = pollution:getOneValue(Monitor, Name, DateAndTime, Type),
-      Pid ! Result,
+      Result = pollution:getOneValue(Monitor, Name, DateAndTime, Type),
+      case Result of
+        {error, Message} ->
+          Pid ! Message;
+        [Value] ->
+          Pid ! Value
+      end,
       loop(Monitor);
     {Pid, getStationMean, Name, Type} ->
       Result = pollution:getStationMean(Monitor, Name, Type),
